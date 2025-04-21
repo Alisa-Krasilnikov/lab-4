@@ -1,0 +1,350 @@
+---
+title: "Trust in Science and Medicine Analysis (2018)"
+format: 
+  dashboard:
+    orientation: columns
+    nav-buttons: [linkedin]
+    linkedin: www.linkedin.com/in/alisa-krasilnikov
+logo: Images/CP_logo_alt_rev.png
+logo-alt: Green Cal Poly logo displaying learn by doing crest
+server: shiny
+theme: Pulse
+---
+
+
+```{r, echo=FALSE, message = FALSE}
+library(shiny)
+library(readxl)
+library(tidyverse)
+library(ggrepel)
+library(leaflet)
+library(rnaturalearth)
+library(plotly)
+library(kableExtra)
+```
+
+```{r, echo=FALSE}
+#| label: read-datasets
+#| context: setup
+
+country_data <- read_excel(
+  here::here("wgm2018-dataset-crosstabs-all-countries.xlsx"), 
+                           sheet = "Full dataset")
+
+country_data_dictionary <- read_excel(
+  here::here("wgm2018-dataset-crosstabs-all-countries.xlsx"), 
+                           sheet = "Data dictionary")
+```
+
+
+```{r, echo=FALSE}
+#| label: country-cleaning
+dictionary_firstrow <- head(country_data_dictionary, n = 1)
+
+variable_codes_list <- as.list(str_split(dictionary_firstrow$`Variable Type & Codes*`, pattern = ","))
+
+variable_codes_tibble <- tibble(Code = str_trim(variable_codes_list[[1]]))
+
+coding <- variable_codes_tibble |> 
+  filter(str_trim(Code) != "") |> 
+  separate_wider_delim(Code, delim = "=", names_sep = "Country") |> 
+  rename(WP5 = "CodeCountry1", Country = "CodeCountry2") |> 
+  mutate(WP5 = as.numeric(WP5))
+```
+
+```{r, echo=FALSE}
+#| label: region-cleaning
+dictionary_regrow <- slice(country_data_dictionary, 57)
+
+variable_codes_list <- as.list(str_split(dictionary_regrow$`Variable Type & Codes*`, pattern = ","))
+
+variable_codes_tibble <- tibble(Code = str_trim(variable_codes_list[[1]]))
+
+region_coding <- variable_codes_tibble |> 
+  filter(str_trim(Code) != "") |> 
+  separate_wider_delim(Code, delim = "=", names_sep = "Country") |> 
+  rename(Regions_Report = "CodeCountry1", Region = "CodeCountry2") |> 
+  mutate(Regions_Report = as.numeric(Regions_Report))
+```
+
+```{r, echo=FALSE}
+#| label: merging
+
+cleaned_dataset <- merge(country_data, coding, by = "WP5")
+cleaned_dataset <- merge(cleaned_dataset, region_coding, by = "Regions_Report") 
+
+```
+
+```{r, echo = FALSE}
+#| label: new-regions
+
+cleaned_dataset <- cleaned_dataset |> 
+   mutate(New_region = case_when(
+    Region %in% c("Eastern Africa", "Central Africa", "North Africa", "Southern Africa", "Western Africa") ~ "Africa",
+    Region %in% c("Central America and Mexico", "Northern America", "South America") ~ "Americas",
+    Region %in% c("Central Asia", "East Asia", "Southeast Asia", "South Asia") ~ "Asia",
+    Region %in% c("Middle East") ~ "Middle East",
+    Region %in% c("Eastern Europe", "Northern Europe", "Southern Europe", "Western Europe") ~ "Europe",
+    Region == "Aus/NZ" ~ "Oceania",
+    Region == "Not assigned" ~ "Other",
+    TRUE ~ "Other"  # fallback just in case
+  ))
+```
+
+
+```{r, echo=FALSE}
+#| label: new-dataset-cleaning
+
+final_dataset_2 <- cleaned_dataset |> 
+  group_by(Country) |> 
+  summarize(
+    total = n(),
+    prop_low_trust = (sum(WGM_Indexr == 1, na.rm = TRUE) / total) * 100,
+    prop_med_trust = (sum(WGM_Indexr == 2, na.rm = TRUE) / total) * 100,
+    prop_high_trust = (sum(WGM_Indexr == 3, na.rm = TRUE) / total) * 100,
+    prop_no_opinion = (sum(WGM_Indexr == 99, na.rm = TRUE) / total) * 100,
+    avg_trust = mean(WGM_Index, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+```
+
+```{r, echo=FALSE}
+#| label: new-dataset-adding-countries
+
+final_dataset_2 <- final_dataset_2 |> 
+  mutate(Country = case_when(
+    Country == "United States" ~ "United States of America",
+    Country == "Czech Republic" ~ "Czechia",
+    Country == "Ivory Coast" ~ "Côte d'Ivoire",
+    Country == "Republic of Congo" ~ "Dem. Rep. Congo",
+    TRUE ~ Country
+  ))
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+map_data <- world |>
+  left_join(final_dataset_2, by = c("name" = "Country")) |> 
+  filter(name != "Antarctica") 
+```
+
+# {.sidebar}
+
+```{r}
+#sliderInput('avg_trust', 'Average Trust in Science Index', 
+ #           min=1, max=4,
+  #          value=min(1, 4), 
+   #         step=1, round=0.5)
+
+#br()
+# Sidebar with region selection
+checkboxGroupInput('region', 'Select Regions:',
+                         choices = unique(cleaned_dataset$New_region),
+                         selected = unique(cleaned_dataset$New_region))
+
+server <- function(input, output, session) {
+  
+  filtered_countries <- reactive({
+    data <- cleaned_dataset[cleaned_dataset$New_region %in% input$region, ]
+    return(data)
+  })
+}
+```
+
+# Plots
+
+## Column - Trust in Science 
+
+### Row - Trust in Science Display {height="75%"}
+```{r, echo=FALSE}
+#| label: 2nd-visual
+#| title: "Map Display of Trust in Science"
+output$map <- renderLeaflet({
+  data <- filtered_countries()
+  
+  pal <- colorNumeric(
+    palette = "magma",
+    domain = c(1, 4),
+    reverse = TRUE,
+    na.color = "grey"
+  )
+  
+  leaflet(data = data) %>%
+    addTiles() %>%
+    addPolygons(
+      fillColor = ~pal(avg_trust),
+      color = "white",
+      weight = 0.5,
+      fillOpacity = 0.8,
+      popup = ~paste0(
+        "<b>", name, "</b><br>",
+        "High Trust: ", round(prop_high_trust, 2), "%<br>",
+        "Medium Trust: ", round(prop_med_trust, 2), "%<br>",
+        "Low Trust: ", round(prop_low_trust, 2), "%<br>",
+        "No Opinion: ", round(prop_no_opinion, 2), "%<br>",
+        "Avg Science Trust Index: ", round(avg_trust, 2)
+      ),
+      label = ~paste(name, "Average Trust in Science Index: ", round(avg_trust, 2))
+    ) %>%
+    addLegend(pal = pal, values = c(1, 4), title = "Average Trust in Science Index") %>%
+    setView(lng = 0, lat = 50, zoom = 1.4)
+})
+```
+### Row - What is the Trust in Science Index? {height="25%"}
+
+::: {.card title="What is the Trust in Science Index?"}
+This metric aggregates public responses to questions about trust in science and scientists. Individuals sampled within countries received a trust score between **1 (low trust)** and **4 (high trust)**. The colors on the map will indicate the **average** trust in science score for the country.
+:::
+
+## Column - Percentage of Medical Trust
+
+```{r, echo=FALSE}
+#| label: third-dataset-cleaning
+
+final_dataset_3 <- cleaned_dataset |>
+  group_by(Country) |>
+  summarize(
+    n_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE),
+    prop_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE)/ sum(!is.na(Q11E))
+  )
+
+```
+
+```{r, echo=FALSE}
+#| label: life-expectancy
+
+life <- read_excel(
+  here::here("Life.xls"), 
+  skip = 3,
+  sheet = "Data")
+
+
+life <- life |> 
+  select(`Country Name`, `2018`)
+
+
+final_dataset_3 <- life |>
+  left_join(final_dataset_3, by = c("Country Name" = "Country"))
+```
+
+
+```{r, echo=FALSE}
+#| label: third-visual
+#| 
+final_dataset_3 <- final_dataset_3 |>  
+  filter(!is.na(prop_trust_medic))
+
+fit <- lm(prop_trust_medic ~ `2018`, data = final_dataset_3) |> fitted.values()
+
+plot <- plot_ly(
+  data = final_dataset_3,
+  x = ~`2018`,
+  y = ~prop_trust_medic,
+  type = 'scatter',
+  mode = 'markers',
+  text = ~paste(
+    "Country: ", `Country Name`, "<br>",
+    "Percentage of Trust in Doctors and Nurses: ", round(prop_trust_medic * 100, 1), "%<br>",
+    "Life Expectancy: ", round(`2018`, 0), "years"
+  ),
+  hoverinfo = 'text',
+  marker = list(size = 10,
+                color = '#8b008b')
+)
+
+plot <- layout(
+  plot,
+  title = list(
+    text = "Percentage of trust in medical professionals \nby life expectancy",
+    font = list(size = 20),
+    x = 0.07,
+    xanchor = "left"
+  ),
+  margin = list(t = 100),
+  xaxis = list(
+    title = "Life Expectancy at Birth (2018)",
+    dtick = 10
+  ),
+  yaxis = list(
+    tickformat = ',.0%',
+    title = ""
+  )
+)
+
+plot
+```
+### Value Box {height="25%"}
+```{r, echo = FALSE}
+overall_mean <- final_dataset_3 |> 
+  summarize(mean_trust = mean(prop_trust_medic) * 100) |> 
+  mutate(mean_trust = round(mean_trust, 0))
+
+overall_science_mean <- final_dataset_2 |> 
+  summarize(mean_sci_trust = mean(avg_trust)) |> 
+  mutate(mean_sci_trust = round(mean_sci_trust, 2))
+```
+
+```{r}
+#| content: valuebox
+#| title: "Overall Average Science Trust Index"
+#| color: pink 
+
+list (
+  value = paste(overall_science_mean$mean_sci_trust)
+)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Overall Average Medical Trust"
+#| color: purple 
+
+
+list (
+  value = paste(overall_mean$mean_trust, "%")
+)
+```
+
+# Data
+
+### Column {.tabset}
+
+```{r}
+#| title: Trust in Science
+
+final_dataset_2 |>
+  mutate(
+    "Percent High Trust" = round(prop_high_trust, 2),
+    "Percent Medium Trust" = round(prop_med_trust, 2),
+    "Percent Low Trust" = round(prop_low_trust, 2),
+    "Percent No Opinion" = round(prop_no_opinion, 2),
+    "Avg Science Trust Index" = round(avg_trust, 2)) |> 
+  select(Country, 
+         `Percent High Trust`, 
+         `Percent Medium Trust`, 
+         `Percent Low Trust`, 
+         `Percent No Opinion`, 
+         `Avg Science Trust Index`) |>
+  kbl() |> 
+  kable_material(c("striped", "hover")) |> 
+  scroll_box()
+
+```
+
+```{r}
+#| title: Trust in Medical Professionals (Doctors and Nurses)
+
+
+
+final_dataset_3 |>
+  mutate(
+    "Proportion of Trust" = round(prop_trust_medic, 2),
+    "Life Expectancy (2018)" = round(`2018`, 0)) |> 
+  rename(Country = "Country Name") |> 
+  select(Country,
+         `Proportion of Trust`, 
+         `Life Expectancy (2018)`) |> 
+  kbl() |> 
+  kable_material(c("striped", "hover")) |> 
+  scroll_box()
+
+```
