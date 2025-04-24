@@ -5,14 +5,16 @@ format:
     orientation: columns
     nav-buttons: [linkedin]
     linkedin: www.linkedin.com/in/alisa-krasilnikov
-logo: Images/CP_logo_alt_rev.png
-logo-alt: Green Cal Poly logo displaying learn by doing crest
 server: shiny
 theme: Pulse
+logo: ../Images/CP_logo_alt_rev.png
+logo-alt: Green Cal Poly logo displaying learn by doing crest
 ---
 
 
 ```{r, echo=FALSE, message = FALSE}
+#| context: setup
+
 library(shiny)
 library(readxl)
 library(tidyverse)
@@ -34,11 +36,19 @@ country_data <- read_excel(
 country_data_dictionary <- read_excel(
   here::here("wgm2018-dataset-crosstabs-all-countries.xlsx"), 
                            sheet = "Data dictionary")
+
+life <- read_excel(
+  here::here("Life.xls"), 
+  skip = 3,
+  sheet = "Data")
+
 ```
 
 
 ```{r, echo=FALSE}
 #| label: country-cleaning
+#| context: setup
+
 dictionary_firstrow <- head(country_data_dictionary, n = 1)
 
 variable_codes_list <- as.list(str_split(dictionary_firstrow$`Variable Type & Codes*`, pattern = ","))
@@ -54,6 +64,8 @@ coding <- variable_codes_tibble |>
 
 ```{r, echo=FALSE}
 #| label: region-cleaning
+#| context: setup
+
 dictionary_regrow <- slice(country_data_dictionary, 57)
 
 variable_codes_list <- as.list(str_split(dictionary_regrow$`Variable Type & Codes*`, pattern = ","))
@@ -63,40 +75,26 @@ variable_codes_tibble <- tibble(Code = str_trim(variable_codes_list[[1]]))
 region_coding <- variable_codes_tibble |> 
   filter(str_trim(Code) != "") |> 
   separate_wider_delim(Code, delim = "=", names_sep = "Country") |> 
-  rename(Regions_Report = "CodeCountry1", Region = "CodeCountry2") |> 
+  rename(Regions_Report = "CodeCountry1", Region = "CodeCountry2") |>
   mutate(Regions_Report = as.numeric(Regions_Report))
 ```
 
 ```{r, echo=FALSE}
 #| label: merging
+#| context: setup
 
 cleaned_dataset <- merge(country_data, coding, by = "WP5")
 cleaned_dataset <- merge(cleaned_dataset, region_coding, by = "Regions_Report") 
 
 ```
 
-```{r, echo = FALSE}
-#| label: new-regions
-
-cleaned_dataset <- cleaned_dataset |> 
-   mutate(New_region = case_when(
-    Region %in% c("Eastern Africa", "Central Africa", "North Africa", "Southern Africa", "Western Africa") ~ "Africa",
-    Region %in% c("Central America and Mexico", "Northern America", "South America") ~ "Americas",
-    Region %in% c("Central Asia", "East Asia", "Southeast Asia", "South Asia") ~ "Asia",
-    Region %in% c("Middle East") ~ "Middle East",
-    Region %in% c("Eastern Europe", "Northern Europe", "Southern Europe", "Western Europe") ~ "Europe",
-    Region == "Aus/NZ" ~ "Oceania",
-    Region == "Not assigned" ~ "Other",
-    TRUE ~ "Other"  # fallback just in case
-  ))
-```
-
 
 ```{r, echo=FALSE}
 #| label: new-dataset-cleaning
+#| context: setup
 
 final_dataset_2 <- cleaned_dataset |> 
-  group_by(Country) |> 
+  group_by(Country, Region) |> 
   summarize(
     total = n(),
     prop_low_trust = (sum(WGM_Indexr == 1, na.rm = TRUE) / total) * 100,
@@ -111,6 +109,7 @@ final_dataset_2 <- cleaned_dataset |>
 
 ```{r, echo=FALSE}
 #| label: new-dataset-adding-countries
+#| context: setup
 
 final_dataset_2 <- final_dataset_2 |> 
   mutate(Country = case_when(
@@ -127,39 +126,87 @@ map_data <- world |>
   filter(name != "Antarctica") 
 ```
 
+```{r, echo = FALSE}
+#| label: new-regions
+#| context: setup
+
+map_data <- map_data |> 
+   mutate(New_region = case_when(
+    Region %in% c("Eastern Africa", "Central Africa", "North Africa", "Southern Africa", "Western Africa") ~ "Africa",
+    Region %in% c("Central America and Mexico", "Northern America", "South America") ~ "Americas",
+    Region %in% c("Central Asia", "East Asia", "Southeast Asia", "South Asia") ~ "Asia",
+    Region %in% c("Middle East") ~ "Middle East",
+    Region %in% c("Eastern Europe", "Northern Europe", "Southern Europe", "Western Europe") ~ "Europe",
+    Region == "Aus/NZ" ~ "Oceania",
+    is.na(Region) ~ "Other",
+    TRUE ~ "Other"
+  ))
+```
+
+```{r, echo=FALSE}
+#| label: third-dataset-cleaning
+#| context: setup
+
+final_dataset_3 <- cleaned_dataset |>
+  group_by(Country) |>
+  summarize(
+    n_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE),
+    prop_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE)/ sum(!is.na(Q11E))
+  )
+
+```
+
+```{r, echo=FALSE}
+#| label: life-expectancy
+#| context: setup
+
+life <- life |> 
+  select(`Country Name`, `2018`)
+
+
+final_dataset_3 <- life |>
+  left_join(final_dataset_3, by = c("Country Name" = "Country"))
+
+final_dataset_3 <- final_dataset_3 |>  
+  filter(!is.na(prop_trust_medic))
+
+```
+
 # {.sidebar}
 
 ```{r}
-#sliderInput('avg_trust', 'Average Trust in Science Index', 
- #           min=1, max=4,
-  #          value=min(1, 4), 
-   #         step=1, round=0.5)
-
-#br()
-# Sidebar with region selection
 checkboxGroupInput('region', 'Select Regions:',
-                         choices = unique(cleaned_dataset$New_region),
-                         selected = unique(cleaned_dataset$New_region))
+                         choices = unique(map_data$New_region),
+                         selected = unique(map_data$New_region))
 
-server <- function(input, output, session) {
-  
-  filtered_countries <- reactive({
-    data <- cleaned_dataset[cleaned_dataset$New_region %in% input$region, ]
-    return(data)
-  })
-}
+br()
+
+sliderInput("range", "Select Life Expectancy Range:",
+            min = 0, max = 100, value = c(0,100))
 ```
 
 # Plots
 
 ## Column - Trust in Science 
 
+```{r}
+leafletOutput("map", height = "300vh")
+plotOutput("plot")
+```
+
+
 ### Row - Trust in Science Display {height="75%"}
+
 ```{r, echo=FALSE}
 #| label: 2nd-visual
 #| title: "Map Display of Trust in Science"
+#| context: server
+
+filtered_countries <- reactive({
+    map_data[map_data$New_region %in% input$region, ]
+  })
+
 output$map <- renderLeaflet({
-  data <- filtered_countries()
   
   pal <- colorNumeric(
     palette = "magma",
@@ -167,9 +214,10 @@ output$map <- renderLeaflet({
     reverse = TRUE,
     na.color = "grey"
   )
+ 
   
-  leaflet(data = data) %>%
-    addTiles() %>%
+  leaflet(data = filtered_countries()) |> 
+    addTiles() |> 
     addPolygons(
       fillColor = ~pal(avg_trust),
       color = "white",
@@ -184,11 +232,12 @@ output$map <- renderLeaflet({
         "Avg Science Trust Index: ", round(avg_trust, 2)
       ),
       label = ~paste(name, "Average Trust in Science Index: ", round(avg_trust, 2))
-    ) %>%
-    addLegend(pal = pal, values = c(1, 4), title = "Average Trust in Science Index") %>%
+    ) |> 
+    addLegend(pal = pal, values = c(1, 4), title = "Average Trust in Science Index") |> 
     setView(lng = 0, lat = 50, zoom = 1.4)
 })
 ```
+
 ### Row - What is the Trust in Science Index? {height="25%"}
 
 ::: {.card title="What is the Trust in Science Index?"}
@@ -198,42 +247,8 @@ This metric aggregates public responses to questions about trust in science and 
 ## Column - Percentage of Medical Trust
 
 ```{r, echo=FALSE}
-#| label: third-dataset-cleaning
-
-final_dataset_3 <- cleaned_dataset |>
-  group_by(Country) |>
-  summarize(
-    n_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE),
-    prop_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE)/ sum(!is.na(Q11E))
-  )
-
-```
-
-```{r, echo=FALSE}
-#| label: life-expectancy
-
-life <- read_excel(
-  here::here("Life.xls"), 
-  skip = 3,
-  sheet = "Data")
-
-
-life <- life |> 
-  select(`Country Name`, `2018`)
-
-
-final_dataset_3 <- life |>
-  left_join(final_dataset_3, by = c("Country Name" = "Country"))
-```
-
-
-```{r, echo=FALSE}
 #| label: third-visual
-#| 
-final_dataset_3 <- final_dataset_3 |>  
-  filter(!is.na(prop_trust_medic))
-
-fit <- lm(prop_trust_medic ~ `2018`, data = final_dataset_3) |> fitted.values()
+#| context: setup
 
 plot <- plot_ly(
   data = final_dataset_3,
@@ -274,6 +289,8 @@ plot
 ```
 ### Value Box {height="25%"}
 ```{r, echo = FALSE}
+#| context: setup
+
 overall_mean <- final_dataset_3 |> 
   summarize(mean_trust = mean(prop_trust_medic) * 100) |> 
   mutate(mean_trust = round(mean_trust, 0))
@@ -287,6 +304,7 @@ overall_science_mean <- final_dataset_2 |>
 #| content: valuebox
 #| title: "Overall Average Science Trust Index"
 #| color: pink 
+#| context: setup
 
 list (
   value = paste(overall_science_mean$mean_sci_trust)
@@ -297,6 +315,7 @@ list (
 #| content: valuebox
 #| title: "Overall Average Medical Trust"
 #| color: purple 
+#| context: setup
 
 
 list (
@@ -310,6 +329,7 @@ list (
 
 ```{r}
 #| title: Trust in Science
+#| context: setup
 
 final_dataset_2 |>
   mutate(
@@ -332,6 +352,7 @@ final_dataset_2 |>
 
 ```{r}
 #| title: Trust in Medical Professionals (Doctors and Nurses)
+#| context: setup
 
 
 
