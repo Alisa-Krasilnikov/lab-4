@@ -147,16 +147,16 @@ map_data <- map_data |>
 # {.sidebar}
 
 ```{r}
-#sliderInput('avg_trust', 'Average Trust in Science Index', 
- #           min=1, max=4,
-  #          value=min(1, 4), 
-   #         step=1, round=0.5)
-
-#br()
-# Sidebar with region selection
 checkboxGroupInput('region', 'Select Regions:',
-                         choices = unique(map_data$New_region),
-                         selected = unique(map_data$New_region))
+                   choices = sort(unique(map_data$New_region)),
+                   selected = sort(unique(map_data$New_region)))
+
+br()
+
+sliderInput('age_range', 'Expected Life Expectancy', 
+             min=50, max=100,
+             value= c(50, 100), 
+             step=5)
 ```
 
 # Plots
@@ -168,7 +168,7 @@ leafletOutput("map", height = "300vh")
 ```
 
 
-### Row - Trust in Science Display {height="75%"}
+### Row - Trust in Science Display {height="70%"}
 
 ```{r, echo=FALSE}
 #| label: 2nd-visual
@@ -271,8 +271,12 @@ final_dataset_3 <- final_dataset_3 |>
 #| context: server
 
 filtered_countries2 <- reactive({
-    final_dataset_3[final_dataset_3$New_region %in% input$region, ]
-  })
+  final_dataset_3[
+    final_dataset_3$New_region %in% input$region &
+    final_dataset_3$`2018` >= input$age_range[1] &
+    final_dataset_3$`2018` <= input$age_range[2],
+  ]
+})
 
 output$plot <- renderPlotly({ 
   plot <- plot_ly(
@@ -314,7 +318,7 @@ plot
 })
 ```
 
-### Value Box {height="25%"}
+### Value Box {height="30%"}
 ```{r, echo = FALSE}
 #| context: setup
 
@@ -380,11 +384,8 @@ final_dataset_2 |>
 #| title: Trust in Medical Professionals (Doctors and Nurses)
 #| context: setup
 
-filtered_countries <- reactive({
-    map_data[map_data$New_region %in% input$region, ]
-  })
-
 final_dataset_3 |>
+  filter(!is.na(prop_trust_medic)) |> 
   mutate(
     "Proportion of Trust" = round(prop_trust_medic, 2),
     "Life Expectancy (2018)" = round(`2018`, 0)) |> 
