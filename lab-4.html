@@ -122,29 +122,33 @@ What is the Trust in Science Index?
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card valuebox cell html-fill-item html-fill-container bslib-card bslib-value-box bg-pink" data-bslib-card-init="" data-require-bs-caller="card()">
 <div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div class="shiny-html-output col-sm-8 html-fill-item html-fill-container" id="scienceValueBox"></div>
+<div class="html-fill-item html-fill-container value-box-grid">
+<div class="value-box-area">
+<p class="value-box-title">
+Overall Average Science Trust Index
+</p>
+<p class="value-box-value">
+2.94
+</p>
 </div>
 </div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+</div>
+<script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card valuebox cell html-fill-item html-fill-container bslib-card bslib-value-box bg-purple" data-bslib-card-init="" data-require-bs-caller="card()">
 <div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div class="shiny-html-output col-sm-8 html-fill-item html-fill-container" id="medValueBox"></div>
+<div class="html-fill-item html-fill-container value-box-grid">
+<div class="value-box-area">
+<p class="value-box-title">
+Overall Average Medical Trust
+</p>
+<p class="value-box-value">
+81 %
+</p>
 </div>
 </div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
 </div>
 </div>
@@ -2969,38 +2973,27 @@ plot
 })
 </script>
  
-<script type="application/shiny-prerendered" data-context="server">
-overall_mean <- reactive({
-  final_dataset_3[final_dataset_3$New_region %in% input$region, ] |>
-    summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |>
-    mutate(mean_trust = round(mean_trust, 0))
-})
+<script type="application/shiny-prerendered" data-context="server-start">
+overall_mean <- final_dataset_3 |> 
+  summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |> 
+  mutate(mean_trust = round(mean_trust, 0))
 
-overall_science_mean <- reactive({
-  map_data[map_data$New_region %in% input$region, ] |>
-    summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |>
-    mutate(mean_sci_trust = round(mean_sci_trust, 2))
-})
+overall_science_mean <- final_dataset_2 |> 
+  summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |> 
+  mutate(mean_sci_trust = round(mean_sci_trust, 2))
 </script>
  
-<script type="application/shiny-prerendered" data-context="server">
-output$scienceValueBox <- renderValueBox({
-  valueBox(
-    value = overall_science_mean()$mean_sci_trust,
-    color = "maroon",
-    subtitle = "Overall Average Science Trust Index"
-  )
-})
+<script type="application/shiny-prerendered" data-context="server-start">
+list (
+  value = paste(overall_science_mean$mean_sci_trust)
+)
 </script>
  
-<script type="application/shiny-prerendered" data-context="server">
-output$medValueBox <- renderValueBox({
-  valueBox(
-    value = paste0(overall_mean()$mean_trust, "%"),
-    color = "purple",
-    subtitle = "Overall Average Medical Trust"
-  )
-})
+<script type="application/shiny-prerendered" data-context="server-start">
+
+list (
+  value = paste(overall_mean$mean_trust, "%")
+)
 </script>
  
 <script type="application/shiny-prerendered" data-context="server-start">

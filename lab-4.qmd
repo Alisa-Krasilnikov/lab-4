@@ -315,55 +315,40 @@ plot
 ```
 
 ### Value Box {height="25%"}
-
-```{r}
-valueBoxOutput("scienceValueBox", width = 8)
-```
-
 ```{r, echo = FALSE}
-#| context: server
+#| context: setup
 
-overall_mean <- reactive({
-  final_dataset_3[final_dataset_3$New_region %in% input$region, ] |>
-    summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |>
-    mutate(mean_trust = round(mean_trust, 0))
-})
+overall_mean <- final_dataset_3 |> 
+  summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |> 
+  mutate(mean_trust = round(mean_trust, 0))
 
-overall_science_mean <- reactive({
-  map_data[map_data$New_region %in% input$region, ] |>
-    summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |>
-    mutate(mean_sci_trust = round(mean_sci_trust, 2))
-})
+overall_science_mean <- final_dataset_2 |> 
+  summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |> 
+  mutate(mean_sci_trust = round(mean_sci_trust, 2))
 ```
 
 ```{r}
-#| context: server
+#| content: valuebox
+#| title: "Overall Average Science Trust Index"
+#| color: pink 
+#| context: setup
 
-output$scienceValueBox <- renderValueBox({
-  valueBox(
-    value = overall_science_mean()$mean_sci_trust,
-    color = "maroon",
-    subtitle = "Overall Average Science Trust Index"
-  )
-})
+list (
+  value = paste(overall_science_mean$mean_sci_trust)
+)
 ```
 
 ```{r}
-valueBoxOutput("medValueBox", width = 8)
+#| content: valuebox
+#| title: "Overall Average Medical Trust"
+#| color: purple 
+#| context: setup
+
+
+list (
+  value = paste(overall_mean$mean_trust, "%")
+)
 ```
-
-```{r}
-#| context: server
-
-output$medValueBox <- renderValueBox({
-  valueBox(
-    value = paste0(overall_mean()$mean_trust, "%"),
-    color = "purple",
-    subtitle = "Overall Average Medical Trust"
-  )
-})
-```
-
 # Data
 
 ### Column {.tabset}
