@@ -5,10 +5,10 @@ format:
     orientation: columns
     nav-buttons: [linkedin]
     linkedin: www.linkedin.com/in/alisa-krasilnikov
+logo: Images/CP_logo_alt_rev.png
+logo-alt: Green Cal Poly logo displaying learn by doing crest
 server: shiny
 theme: Pulse
-logo: ../Images/CP_logo_alt_rev.png
-logo-alt: Green Cal Poly logo displaying learn by doing crest
 ---
 
 
@@ -16,6 +16,7 @@ logo-alt: Green Cal Poly logo displaying learn by doing crest
 #| context: setup
 
 library(shiny)
+library(shinydashboard)
 library(readxl)
 library(tidyverse)
 library(ggrepel)
@@ -143,46 +144,19 @@ map_data <- map_data |>
   ))
 ```
 
-```{r, echo=FALSE}
-#| label: third-dataset-cleaning
-#| context: setup
-
-final_dataset_3 <- cleaned_dataset |>
-  group_by(Country) |>
-  summarize(
-    n_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE),
-    prop_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE)/ sum(!is.na(Q11E))
-  )
-
-```
-
-```{r, echo=FALSE}
-#| label: life-expectancy
-#| context: setup
-
-life <- life |> 
-  select(`Country Name`, `2018`)
-
-
-final_dataset_3 <- life |>
-  left_join(final_dataset_3, by = c("Country Name" = "Country"))
-
-final_dataset_3 <- final_dataset_3 |>  
-  filter(!is.na(prop_trust_medic))
-
-```
-
 # {.sidebar}
 
 ```{r}
+#sliderInput('avg_trust', 'Average Trust in Science Index', 
+ #           min=1, max=4,
+  #          value=min(1, 4), 
+   #         step=1, round=0.5)
+
+#br()
+# Sidebar with region selection
 checkboxGroupInput('region', 'Select Regions:',
                          choices = unique(map_data$New_region),
                          selected = unique(map_data$New_region))
-
-br()
-
-sliderInput("range", "Select Life Expectancy Range:",
-            min = 0, max = 100, value = c(0,100))
 ```
 
 # Plots
@@ -191,7 +165,6 @@ sliderInput("range", "Select Life Expectancy Range:",
 
 ```{r}
 leafletOutput("map", height = "300vh")
-plotOutput("plot")
 ```
 
 
@@ -246,12 +219,64 @@ This metric aggregates public responses to questions about trust in science and 
 
 ## Column - Percentage of Medical Trust
 
+```{r}
+plotlyOutput("plot")
+```
+
+
 ```{r, echo=FALSE}
-#| label: third-visual
+#| label: third-dataset-cleaning
 #| context: setup
 
-plot <- plot_ly(
-  data = final_dataset_3,
+final_dataset_3 <- cleaned_dataset |>
+  group_by(Country, Region) |>
+  summarize(
+    n_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE),
+    prop_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE)/ sum(!is.na(Q11E))
+  )
+
+```
+
+```{r, echo=FALSE}
+#| label: life-expectancy
+#| context: setup
+
+life <- life |> 
+  select(`Country Name`, `2018`)
+
+
+final_dataset_3 <- life |>
+  left_join(final_dataset_3, by = c("Country Name" = "Country"))
+```
+
+```{r, echo = FALSE}
+#| label: plotly-new-regions
+#| context: setup
+
+final_dataset_3 <- final_dataset_3 |> 
+   mutate(New_region = case_when(
+    Region %in% c("Eastern Africa", "Central Africa", "North Africa", "Southern Africa", "Western Africa") ~ "Africa",
+    Region %in% c("Central America and Mexico", "Northern America", "South America") ~ "Americas",
+    Region %in% c("Central Asia", "East Asia", "Southeast Asia", "South Asia") ~ "Asia",
+    Region %in% c("Middle East") ~ "Middle East",
+    Region %in% c("Eastern Europe", "Northern Europe", "Southern Europe", "Western Europe") ~ "Europe",
+    Region == "Aus/NZ" ~ "Oceania",
+    is.na(Region) ~ "Other",
+    TRUE ~ "Other"
+  ))
+```
+
+```{r, echo=FALSE}
+#| label: third-visual
+#| context: server
+
+filtered_countries2 <- reactive({
+    final_dataset_3[final_dataset_3$New_region %in% input$region, ]
+  })
+
+output$plot <- renderPlotly({ 
+  plot <- plot_ly(
+  data = filtered_countries2(),
   x = ~`2018`,
   y = ~prop_trust_medic,
   type = 'scatter',
@@ -265,8 +290,8 @@ plot <- plot_ly(
   marker = list(size = 10,
                 color = '#8b008b')
 )
-
-plot <- layout(
+  
+  plot <- layout(
   plot,
   title = list(
     text = "Percentage of trust in medical professionals \nby life expectancy",
@@ -286,41 +311,57 @@ plot <- layout(
 )
 
 plot
+})
 ```
+
 ### Value Box {height="25%"}
+
+```{r}
+valueBoxOutput("scienceValueBox", width = 8)
+```
+
 ```{r, echo = FALSE}
-#| context: setup
+#| context: server
 
-overall_mean <- final_dataset_3 |> 
-  summarize(mean_trust = mean(prop_trust_medic) * 100) |> 
-  mutate(mean_trust = round(mean_trust, 0))
+overall_mean <- reactive({
+  final_dataset_3[final_dataset_3$New_region %in% input$region, ] |>
+    summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |>
+    mutate(mean_trust = round(mean_trust, 0))
+})
 
-overall_science_mean <- final_dataset_2 |> 
-  summarize(mean_sci_trust = mean(avg_trust)) |> 
-  mutate(mean_sci_trust = round(mean_sci_trust, 2))
+overall_science_mean <- reactive({
+  map_data[map_data$New_region %in% input$region, ] |>
+    summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |>
+    mutate(mean_sci_trust = round(mean_sci_trust, 2))
+})
 ```
 
 ```{r}
-#| content: valuebox
-#| title: "Overall Average Science Trust Index"
-#| color: pink 
-#| context: setup
+#| context: server
 
-list (
-  value = paste(overall_science_mean$mean_sci_trust)
-)
+output$scienceValueBox <- renderValueBox({
+  valueBox(
+    value = overall_science_mean()$mean_sci_trust,
+    color = "maroon",
+    subtitle = "Overall Average Science Trust Index"
+  )
+})
 ```
 
 ```{r}
-#| content: valuebox
-#| title: "Overall Average Medical Trust"
-#| color: purple 
-#| context: setup
+valueBoxOutput("medValueBox", width = 8)
+```
 
+```{r}
+#| context: server
 
-list (
-  value = paste(overall_mean$mean_trust, "%")
-)
+output$medValueBox <- renderValueBox({
+  valueBox(
+    value = paste0(overall_mean()$mean_trust, "%"),
+    color = "purple",
+    subtitle = "Overall Average Medical Trust"
+  )
+})
 ```
 
 # Data
@@ -354,7 +395,9 @@ final_dataset_2 |>
 #| title: Trust in Medical Professionals (Doctors and Nurses)
 #| context: setup
 
-
+filtered_countries <- reactive({
+    map_data[map_data$New_region %in% input$region, ]
+  })
 
 final_dataset_3 |>
   mutate(
