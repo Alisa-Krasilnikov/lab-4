@@ -5,16 +5,15 @@ format:
     orientation: columns
     nav-buttons: [linkedin]
     linkedin: www.linkedin.com/in/alisa-krasilnikov
-logo: Images/CP_logo_alt_rev.png
-logo-alt: Green Cal Poly logo displaying learn by doing crest
 server: shiny
 theme: Pulse
+logo: images/CP_logo_alt_rev.svg
+logo-alt: Green Cal Poly logo displaying learn by doing crest
 ---
 
 
 ```{r, echo=FALSE, message = FALSE}
 #| context: setup
-
 library(shiny)
 library(shinydashboard)
 library(readxl)
@@ -153,10 +152,17 @@ checkboxGroupInput('region', 'Select Regions:',
 
 br()
 
-sliderInput('age_range', 'Expected Life Expectancy', 
+sliderInput('age_range', 'Select Expected Life Expectancy Range:', 
              min=50, max=100,
              value= c(50, 100), 
              step=5)
+
+br()
+
+sliderInput('science_index', 'Select Trust in Science Index Range:', 
+             min=1, max=4,
+             value= c(1, 4), 
+             step=1)
 ```
 
 # Plots
@@ -176,8 +182,12 @@ leafletOutput("map", height = "300vh")
 #| context: server
 
 filtered_countries <- reactive({
-    map_data[map_data$New_region %in% input$region, ]
-  })
+    map_data[map_data$New_region %in% input$region &
+    (is.na(map_data$avg_trust) |
+     (map_data$avg_trust >= input$science_index[1] &
+      map_data$avg_trust <= input$science_index[2])),
+  ]
+})
 
 output$map <- renderLeaflet({
   
@@ -319,39 +329,54 @@ plot
 ```
 
 ### Value Box {height="30%"}
+
+```{r}
+ valueBoxOutput("scienceValueBox", width = 8)
+```
+
 ```{r, echo = FALSE}
-#| context: setup
+#| context: server
 
-overall_mean <- final_dataset_3 |> 
-  summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |> 
-  mutate(mean_trust = round(mean_trust, 0))
+ overall_mean <- reactive({
+   final_dataset_3[final_dataset_3$New_region %in% input$region, ] |>
+     summarize(mean_trust = mean(prop_trust_medic, na.rm = TRUE) * 100) |>
+     mutate(mean_trust = round(mean_trust, 0))
+ })
 
-overall_science_mean <- final_dataset_2 |> 
-  summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |> 
-  mutate(mean_sci_trust = round(mean_sci_trust, 2))
+ overall_science_mean <- reactive({
+   map_data[map_data$New_region %in% input$region, ] |>
+     summarize(mean_sci_trust = mean(avg_trust, na.rm = TRUE)) |>
+     mutate(mean_sci_trust = round(mean_sci_trust, 2))
+ })
 ```
 
 ```{r}
-#| content: valuebox
-#| title: "Overall Average Science Trust Index"
-#| color: pink 
-#| context: setup
+#| context: server
 
-list (
-  value = paste(overall_science_mean$mean_sci_trust)
-)
+output$scienceValueBox <- renderValueBox({
+   valueBox(
+     value = overall_science_mean()$mean_sci_trust,
+     color = "maroon",
+     subtitle = "Overall Average Science Trust Index"
+   )
+ })
 ```
 
 ```{r}
-#| content: valuebox
-#| title: "Overall Average Medical Trust"
-#| color: purple 
-#| context: setup
+valueBoxOutput("medValueBox", width = 8)
 
+```
 
-list (
-  value = paste(overall_mean$mean_trust, "%")
-)
+```{r}
+#| context: server
+
+output$medValueBox <- renderValueBox({
+   valueBox(
+     value = paste0(overall_mean()$mean_trust, "%"),
+     color = "purple",
+     subtitle = "Overall Average Medical Trust"
+   )
+ })
 ```
 # Data
 
