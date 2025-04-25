@@ -125,7 +125,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div class="shiny-html-output col-sm-8 html-fill-item html-fill-container" id="scienceValueBox"></div>
+<div id="scienceBox" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -136,7 +136,7 @@ grid-auto-rows: minmax(0, 1fr);">
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div class="shiny-html-output col-sm-8 html-fill-item html-fill-container" id="medValueBox"></div>
+<div id="medValueBox" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -2070,6 +2070,7 @@ library(leaflet)
 library(rnaturalearth)
 library(plotly)
 library(kableExtra)
+library(bslib)
 </script>
  
 <script type="application/shiny-prerendered" data-context="server-start">
@@ -2305,22 +2306,22 @@ plot
 </script>
  
 <script type="application/shiny-prerendered" data-context="server">
-output$scienceValueBox <- renderValueBox({
-   valueBox(
-     value = overall_science_mean()$mean_sci_trust,
-     color = "maroon",
-     subtitle = "Overall Average Science Trust Index"
-   )
- })
+output$scienceBox <- renderUI({
+  bslib::value_box(
+    title = "Overall Average Science Trust Index",
+    value = overall_science_mean()$mean_sci_trust,
+    theme = "purple" 
+  )
+})
 </script>
  
 <script type="application/shiny-prerendered" data-context="server">
-output$medValueBox <- renderValueBox({
-   valueBox(
-     value = paste0(overall_mean()$mean_trust, "%"),
-     color = "purple",
-     subtitle = "Overall Average Medical Trust"
-   )
+output$medValueBox <-  renderUI({
+  bslib::value_box(
+    title = "Overall Average Medical Trust",
+    value = paste(overall_mean()$mean_trust, "%"),
+    theme = "pink" 
+  )
  })
 </script>
  

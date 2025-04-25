@@ -23,6 +23,7 @@ library(leaflet)
 library(rnaturalearth)
 library(plotly)
 library(kableExtra)
+library(bslib)
 ```
 
 ```{r, echo=FALSE}
@@ -331,7 +332,7 @@ plot
 ### Value Box {height="30%"}
 
 ```{r}
- valueBoxOutput("scienceValueBox", width = 8)
+uiOutput("scienceBox")
 ```
 
 ```{r, echo = FALSE}
@@ -353,29 +354,28 @@ plot
 ```{r}
 #| context: server
 
-output$scienceValueBox <- renderValueBox({
-   valueBox(
-     value = overall_science_mean()$mean_sci_trust,
-     color = "maroon",
-     subtitle = "Overall Average Science Trust Index"
-   )
- })
+output$scienceBox <- renderUI({
+  bslib::value_box(
+    title = "Overall Average Science Trust Index",
+    value = overall_science_mean()$mean_sci_trust,
+    theme = "purple" 
+  )
+})
 ```
 
 ```{r}
-valueBoxOutput("medValueBox", width = 8)
-
+uiOutput("medValueBox")
 ```
 
 ```{r}
 #| context: server
 
-output$medValueBox <- renderValueBox({
-   valueBox(
-     value = paste0(overall_mean()$mean_trust, "%"),
-     color = "purple",
-     subtitle = "Overall Average Medical Trust"
-   )
+output$medValueBox <-  renderUI({
+  bslib::value_box(
+    title = "Overall Average Medical Trust",
+    value = paste(overall_mean()$mean_trust, "%"),
+    theme = "pink" 
+  )
  })
 ```
 # Data
