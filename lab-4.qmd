@@ -15,7 +15,9 @@ logo-alt: Green Cal Poly logo displaying learn by doing crest
 ```{r, echo=FALSE, message = FALSE}
 #| label: library
 #| context: setup
-
+if (!requireNamespace("rnaturalearthdata", quietly = TRUE)) {
+  install.packages("rnaturalearthdata")
+}
 library(shiny)
 library(shinydashboard)
 library(readxl)
@@ -27,6 +29,7 @@ library(plotly)
 library(kableExtra)
 library(bslib)
 library(scales)
+library(rnaturalearthdata)
 ```
 
 ```{r}

@@ -1,0 +1,125 @@
+---
+title: "Lab 4 data"
+format: html
+---
+
+```{r, echo=FALSE, message = FALSE}
+#| context: setup
+library(shiny)
+library(shinydashboard)
+library(readxl)
+library(tidyverse)
+library(ggrepel)
+library(leaflet)
+library(rnaturalearth)
+library(plotly)
+library(kableExtra)
+library(bslib)
+library(sf)
+
+```
+
+```{r, echo=FALSE}
+#| label: read-datasets
+
+country_data <- read_excel(
+  here::here("wgm2018-dataset-crosstabs-all-countries.xlsx"), 
+                           sheet = "Full dataset")
+
+country_data_dictionary <- read_excel(
+  here::here("wgm2018-dataset-crosstabs-all-countries.xlsx"), 
+                           sheet = "Data dictionary")
+
+life <- read_excel(
+  here::here("Life.xls"), 
+  skip = 3,
+  sheet = "Data")
+
+life <- life |> 
+  select(`Country Name`, `2018`)
+```
+
+```{r, echo=FALSE}
+#| label: country-cleaning
+
+dictionary_firstrow <- head(country_data_dictionary, n = 1)
+
+variable_codes_list <- as.list(str_split(dictionary_firstrow$`Variable Type & Codes*`, pattern = ","))
+
+variable_codes_tibble <- tibble(Code = str_trim(variable_codes_list[[1]]))
+
+coding <- variable_codes_tibble |> 
+  filter(str_trim(Code) != "") |> 
+  separate_wider_delim(Code, delim = "=", names_sep = "Country") |> 
+  rename(WP5 = "CodeCountry1", Country = "CodeCountry2") |> 
+  mutate(WP5 = as.numeric(WP5))
+```
+
+```{r, echo=FALSE}
+#| label: region-cleaning
+
+dictionary_regrow <- slice(country_data_dictionary, 57)
+
+variable_codes_list <- as.list(str_split(dictionary_regrow$`Variable Type & Codes*`, pattern = ","))
+
+variable_codes_tibble <- tibble(Code = str_trim(variable_codes_list[[1]]))
+
+region_coding <- variable_codes_tibble |> 
+  filter(str_trim(Code) != "") |> 
+  separate_wider_delim(Code, delim = "=", names_sep = "Country") |> 
+  rename(Regions_Report = "CodeCountry1", Region = "CodeCountry2") |>
+  mutate(Regions_Report = as.numeric(Regions_Report))
+```
+
+
+```{r, echo=FALSE}
+#| label: merging
+
+cleaned_dataset <- merge(country_data, coding, by = "WP5")
+cleaned_dataset <- merge(cleaned_dataset, region_coding, by = "Regions_Report") 
+```
+
+```{r, echo=FALSE}
+#| label: new-dataset-adding-countries-regions
+
+cleaned_dataset <- cleaned_dataset |> 
+  mutate(Country = case_when(
+    Country == "United States" ~ "United States of America",
+    Country == "Czech Republic" ~ "Czechia",
+    Country == "Ivory Coast" ~ "Côte d'Ivoire",
+    Country == "Republic of Congo" ~ "Dem. Rep. Congo",
+    TRUE ~ Country
+  ))
+
+```
+
+```{r, echo=FALSE}
+#| label: new-dataset-cleaning
+
+cleaned_dataset <- cleaned_dataset |> 
+  group_by(Country, Region) |> 
+  summarize(
+    total = n(),
+    prop_low_trust = (sum(WGM_Indexr == 1, na.rm = TRUE) / total) * 100,
+    prop_med_trust = (sum(WGM_Indexr == 2, na.rm = TRUE) / total) * 100,
+    prop_high_trust = (sum(WGM_Indexr == 3, na.rm = TRUE) / total) * 100,
+    prop_no_opinion = (sum(WGM_Indexr == 99, na.rm = TRUE) / total) * 100,
+    avg_trust = mean(WGM_Index, na.rm = TRUE), 
+    n_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE),
+    prop_trust_medic = sum(Q11E %in% c(1,2), na.rm = TRUE)/ sum(!is.na(Q11E)
+  ))
+```
+
+```{r}
+#| label: add-age
+
+cleaned_dataset <- cleaned_dataset |>
+  left_join(life |> select(`Country Name`, `2018`), by = c("Country" = "Country Name"))
+```
+
+```{r}
+#| label: output-data
+
+write.csv(cleaned_dataset, "cleaned_dataset.csv", row.names = FALSE)
+```
+
