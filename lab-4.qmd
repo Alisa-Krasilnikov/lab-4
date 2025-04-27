@@ -26,6 +26,7 @@ library(rnaturalearth)
 library(plotly)
 library(kableExtra)
 library(bslib)
+library(scales)
 ```
 
 ```{r}
@@ -99,12 +100,10 @@ sliderInput('science_index', 'Select Trust in Science Index Range:',
 
 ## Column - Trust in Science 
 
-```{r}
-leafletOutput("map", height = "300vh")
-```
-
-
 ### Row - Trust in Science Display {height="70%"}
+```{r}
+leafletOutput("map", height = "1000vh")
+```
 
 ```{r, echo=FALSE}
 #| title: "Map Display of Trust in Science"
@@ -150,18 +149,22 @@ output$map <- renderLeaflet({
 })
 ```
 
-### Row - What is the Trust in Science Index? {height="25%"}
+### Row - Index Descriptors {.tabset .tabset-fade}
 
-::: {.card title="What is the Trust in Science Index?"}
+#### Trust in Science Index
 This metric aggregates public responses to questions about trust in science and scientists. Individuals sampled within countries received a trust score between **1 (low trust)** and **4 (high trust)**. The colors on the map will indicate the **average** trust in science score for the country.
-:::
 
-## Column - Percentage of Medical Trust
+#### Trust in Medical Professionals
+This metric shows the proportion of people in each country who self-reported trusting medical professionals, including doctors and nurses. A **higher percentage** indicates **greater** public confidence in healthcare providers, while a **lower percentage** reflects **less** trust.
+
+
+## Column - Trust in Medicine
+
+### Row - Trust in Medicine Display {height="75%"}
 
 ```{r}
 plotlyOutput("plot")
 ```
-
 
 ```{r, echo=FALSE}
 #| context: server
@@ -214,7 +217,7 @@ output$plot <- renderPlotly({
 })
 ```
 
-### Value Box {height="30%"}
+##### Row - Value Boxes {height="25%"}
 
 ```{r}
 uiOutput("scienceBox")
@@ -274,11 +277,12 @@ output$medValueBox <-  renderUI({
 country_data |>
   drop_na() |> 
   mutate(
-    "Percent High Trust" = round(prop_high_trust, 2),
-    "Percent Medium Trust" = round(prop_med_trust, 2),
-    "Percent Low Trust" = round(prop_low_trust, 2),
-    "Percent No Opinion" = round(prop_no_opinion, 2),
-    "Avg Science Trust Index" = round(avg_trust, 2)) |> 
+    "Percent High Trust" = scales::percent(prop_high_trust / 100, accuracy = 0.1),
+    "Percent Medium Trust" = scales::percent(prop_med_trust / 100, accuracy = 0.1),
+    "Percent Low Trust" = scales::percent(prop_low_trust / 100, accuracy = 0.1),
+    "Percent No Opinion" = scales::percent(prop_no_opinion / 100, accuracy = 0.1),
+    "Avg Science Trust Index" = round(avg_trust, 2)
+  ) |> 
   select(Country, 
          `Percent High Trust`, 
          `Percent Medium Trust`, 
@@ -288,7 +292,6 @@ country_data |>
   kbl() |> 
   kable_material(c("striped", "hover")) |> 
   scroll_box()
-
 ```
 
 
@@ -300,8 +303,9 @@ country_data |>
   filter(!is.na(prop_trust_medic), 
          !is.na(`X2018`)) |> 
   mutate(
-    "Proportion of Trust" = round(prop_trust_medic, 2),
-    "Life Expectancy (2018)" = round(`X2018`, 0)) |> 
+    "Proportion of Trust" = scales::percent(prop_trust_medic, accuracy = 0.1),
+    "Life Expectancy (2018)" = round(`X2018`, 0)
+  ) |> 
   select(Country,
          `Proportion of Trust`, 
          `Life Expectancy (2018)`) |> 
